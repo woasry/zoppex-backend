@@ -68,6 +68,28 @@ export function renderVerificationEmail(firstName: string, url: string): EmailTe
   };
 }
 
+export function renderInvitationEmail(
+  organizationName: string,
+  inviterName: string,
+  role: string,
+  url: string,
+): EmailTemplate {
+  const roleLabel = role === 'ADMIN' ? 'administrator' : 'team member';
+  return {
+    subject: `Join ${organizationName} on ZOPPEX`,
+    html: renderEmailLayout({
+      heading: `${inviterName} invites you to ${organizationName}.`,
+      intro: `You have been invited to join ${organizationName} on ZOPPEX as ${roleLabel === 'administrator' ? 'an administrator' : 'a team member'}. Accept the invitation to start managing queues together.`,
+      actionLabel: 'Accept invitation',
+      actionUrl: url,
+      outro:
+        'This invitation expires in 7 days. If you were not expecting it, you can safely ignore this email.',
+      footer: 'ZOPPEX · Less waiting. More living.',
+    }),
+    text: `${inviterName} invites you to join ${organizationName} on ZOPPEX as ${roleLabel}.\n\nAccept the invitation:\n${url}\n\nThis invitation expires in 7 days. If you were not expecting it, you can safely ignore this email.`,
+  };
+}
+
 export function renderPasswordResetEmail(firstName: string, url: string): EmailTemplate {
   return {
     subject: 'Reset your ZOPPEX password',

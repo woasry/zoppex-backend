@@ -5,6 +5,7 @@ import { validate } from './config/env.validation';
 import { HealthController } from './health/health.controller';
 import { JwtGlobalModule } from './common/jwt-global.module';
 import { ActivityModule } from './modules/activity/activity.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EmailModule } from './modules/notifications/email.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
@@ -31,6 +32,7 @@ import { PrismaModule } from './prisma/prisma.module';
     QueuesModule,
     TicketsModule,
     ActivityModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
 })

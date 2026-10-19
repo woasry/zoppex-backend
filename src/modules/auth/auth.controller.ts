@@ -22,7 +22,9 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthResponseDto, MeResponseDto, MessageResponseDto } from './dto/response.dto';
+import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { AcceptInvitationService } from './accept-invitation.service';
 import { ConfigService } from '@nestjs/config';
 
 export const REFRESH_COOKIE_NAME = 'zoppex_refresh';
@@ -32,6 +34,7 @@ export const REFRESH_COOKIE_NAME = 'zoppex_refresh';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly acceptInvitationService: AcceptInvitationService,
     private readonly configService: ConfigService<AppConfig, true>,
   ) {}
 
@@ -120,6 +123,20 @@ export class AuthController {
   async resendVerification(@CurrentUser() user: JwtPayload): Promise<MessageResponseDto> {
     await this.authService.resendVerification(user.sub);
     return { message: 'Verification email sent' };
+  }
+
+  @Post('invitations/accept')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Accept a team invitation with a token from the email link' })
+  @ApiOkResponse({ type: MessageResponseDto })
+  async acceptInvitation(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AcceptInvitationDto,
+  ): Promise<MessageResponseDto> {
+    const organization = await this.acceptInvitationService.accept(user.sub, dto.token);
+    return { message: `You have joined ${organization.name}` };
   }
 
   @Post('forgot-password')
