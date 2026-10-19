@@ -90,6 +90,67 @@ export function renderInvitationEmail(
   };
 }
 
+export function renderTrialEndingEmail(
+  organizationName: string,
+  daysLeft: number,
+  trialEndsAt: string,
+  appUrl: string,
+): EmailTemplate {
+  const billingUrl = `${appUrl}/settings/billing`;
+  return {
+    subject: 'Your ZOPPEX trial ends soon',
+    html: renderEmailLayout({
+      heading: `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your trial.`,
+      intro: `The ZOPPEX trial for ${organizationName} ends on ${trialEndsAt}. Subscribe any time to keep every queue moving — your data and settings stay exactly as they are.`,
+      actionLabel: 'Subscribe now',
+      actionUrl: billingUrl,
+      outro:
+        'No action is needed if you wish to let the trial expire. You can subscribe at any time afterwards.',
+      footer: 'ZOPPEX · Less waiting. More living.',
+    }),
+    text: `Your ZOPPEX trial for ${organizationName} ends on ${trialEndsAt} (${daysLeft} day${daysLeft === 1 ? '' : 's'} left).\n\nSubscribe at ${billingUrl} to keep every queue moving.`,
+  };
+}
+
+export function renderSubscriptionConfirmedEmail(
+  organizationName: string,
+  amount: string,
+  interval: string,
+  appUrl: string,
+): EmailTemplate {
+  return {
+    subject: 'Your ZOPPEX subscription is active',
+    html: renderEmailLayout({
+      heading: 'Welcome to ZOPPEX.',
+      intro: `The subscription for ${organizationName} is now active — ${amount} per ${interval}. Every queue, guest page and insight stays available without interruption.`,
+      actionLabel: 'Open dashboard',
+      actionUrl: `${appUrl}/overview`,
+      outro: 'You can manage your subscription at any time from Settings → Billing.',
+      footer: 'ZOPPEX · Less waiting. More living.',
+    }),
+    text: `The subscription for ${organizationName} is now active — ${amount} per ${interval}. Manage it any time from Settings → Billing.`,
+  };
+}
+
+export function renderPaymentReceivedEmail(
+  organizationName: string,
+  amount: string,
+  appUrl: string,
+): EmailTemplate {
+  return {
+    subject: 'Payment received — ZOPPEX',
+    html: renderEmailLayout({
+      heading: 'Payment received.',
+      intro: `We have received your payment of ${amount} for ${organizationName}. Thank you for being part of ZOPPEX.`,
+      actionLabel: 'Open dashboard',
+      actionUrl: `${appUrl}/overview`,
+      outro: 'Receipts for each payment are also available in your billing settings.',
+      footer: 'ZOPPEX · Less waiting. More living.',
+    }),
+    text: `We have received your payment of ${amount} for ${organizationName}. Thank you for being part of ZOPPEX.`,
+  };
+}
+
 export function renderPasswordResetEmail(firstName: string, url: string): EmailTemplate {
   return {
     subject: 'Reset your ZOPPEX password',

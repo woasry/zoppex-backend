@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } f
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { OrgMemberGuard } from '../../common/guards/org-member.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { OrganizationContext } from '../../common/interfaces/request-context.interface';
 import { CreateQueueDto } from './dto/create-queue.dto';
 import { UpdateQueueDto } from './dto/update-queue.dto';
@@ -33,7 +34,8 @@ export class QueuesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a queue' })
+  @UseGuards(SubscriptionGuard)
+  @ApiOperation({ summary: 'Create a queue (requires an active trial or subscription)' })
   @ApiOkResponse({ type: QueueDetailDto })
   async create(
     @CurrentOrganization() org: OrganizationContext,
@@ -43,6 +45,7 @@ export class QueuesController {
   }
 
   @Patch(':id')
+  @UseGuards(SubscriptionGuard)
   @ApiOperation({ summary: 'Update queue configuration' })
   @ApiOkResponse({ type: QueueDetailDto })
   async update(
@@ -54,6 +57,7 @@ export class QueuesController {
   }
 
   @Post(':id/call-next')
+  @UseGuards(SubscriptionGuard)
   @ApiOperation({ summary: 'Complete the current guest and call the next one' })
   @ApiOkResponse({ type: QueueActionResultDto })
   async callNext(
@@ -64,6 +68,7 @@ export class QueuesController {
   }
 
   @Post(':id/serve')
+  @UseGuards(SubscriptionGuard)
   @ApiOperation({ summary: 'Mark the currently called guest as served' })
   @ApiOkResponse({ type: QueueActionResultDto })
   async serve(
@@ -74,6 +79,7 @@ export class QueuesController {
   }
 
   @Post(':id/skip')
+  @UseGuards(SubscriptionGuard)
   @ApiOperation({ summary: 'Skip the currently called guest' })
   @ApiOkResponse({ type: QueueActionResultDto })
   async skip(
@@ -84,6 +90,7 @@ export class QueuesController {
   }
 
   @Post(':id/pause')
+  @UseGuards(SubscriptionGuard)
   @ApiOperation({ summary: 'Pause the queue' })
   @ApiOkResponse({ type: QueueActionResultDto })
   async pause(
@@ -94,6 +101,7 @@ export class QueuesController {
   }
 
   @Post(':id/resume')
+  @UseGuards(SubscriptionGuard)
   @ApiOperation({ summary: 'Resume the queue' })
   @ApiOkResponse({ type: QueueActionResultDto })
   async resume(
@@ -103,3 +111,4 @@ export class QueuesController {
     return this.queuesService.setStatus(org.organization.id, id, 'ACTIVE');
   }
 }
+

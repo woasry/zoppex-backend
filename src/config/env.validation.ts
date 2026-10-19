@@ -106,6 +106,10 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  STRIPE_PUBLISHABLE_KEY: string;
+
+  @IsString()
+  @IsOptional()
   STRIPE_WEBHOOK_SECRET: string;
 
   @IsString()

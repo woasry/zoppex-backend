@@ -27,11 +27,19 @@ export interface AppConfig {
   };
   stripe: {
     secretKey: string;
+    publishableKey: string;
     webhookSecret: string;
     priceMonthlyGbp: string;
     priceAnnualGbp: string;
     priceMonthlyUsd: string;
     priceAnnualUsd: string;
+  };
+  pricing: {
+    monthlyGbp: number;
+    annualGbp: number;
+    monthlyUsd: number;
+    annualUsd: number;
+    trialDays: number;
   };
   oblio: {
     clientId: string;
@@ -69,11 +77,19 @@ export default (): AppConfig => {
     },
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY ?? '',
+      publishableKey: env.STRIPE_PUBLISHABLE_KEY ?? '',
       webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
       priceMonthlyGbp: env.STRIPE_PRICE_MONTHLY_GBP ?? '',
       priceAnnualGbp: env.STRIPE_PRICE_ANNUAL_GBP ?? '',
       priceMonthlyUsd: env.STRIPE_PRICE_MONTHLY_USD ?? '',
       priceAnnualUsd: env.STRIPE_PRICE_ANNUAL_USD ?? '',
+    },
+    pricing: {
+      monthlyGbp: Number(env.PRICE_MONTHLY_GBP ?? 39),
+      annualGbp: Number(env.PRICE_ANNUAL_GBP ?? 390),
+      monthlyUsd: Number(env.PRICE_MONTHLY_USD ?? 49),
+      annualUsd: Number(env.PRICE_ANNUAL_USD ?? 490),
+      trialDays: Number(env.TRIAL_DAYS ?? 14),
     },
     oblio: {
       clientId: env.OBLIO_CLIENT_ID ?? '',
