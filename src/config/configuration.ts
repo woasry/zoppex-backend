@@ -1,7 +1,9 @@
 import { EnvironmentVariables } from './env.validation';
 
 export interface AppConfig {
+  nodeEnv: string;
   port: number;
+
   appUrl: string;
   corsOrigins: string[];
   databaseUrl: string;
@@ -40,7 +42,9 @@ export interface AppConfig {
 export default (): AppConfig => {
   const env = process.env as unknown as Record<string, string>;
   return {
+    nodeEnv: env.NODE_ENV ?? 'development',
     port: Number(env.PORT ?? 4000),
+
     appUrl: env.APP_URL,
     corsOrigins: (env.CORS_ORIGIN ?? '').split(',').map((origin) => origin.trim()),
     databaseUrl: env.DATABASE_URL,
