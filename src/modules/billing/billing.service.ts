@@ -68,9 +68,7 @@ export class BillingService {
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly emailService: EmailService,
   ) {
-    this.stripe = new Stripe(this.configService.get('stripe.secretKey', { infer: true }), {
-      apiVersion: '2024-06-20',
-    });
+    this.stripe = new Stripe(this.configService.get('stripe.secretKey', { infer: true }));
   }
 
   async getStatus(organizationId: string): Promise<BillingStatusDto> {

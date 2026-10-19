@@ -9,21 +9,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { InvoicingService } from '../invoicing/invoicing.service';
 import { BillingService } from './billing.service';
 
-interface InvoiceWithSubscription extends Stripe.Invoice {
-  subscription?: string | { id: string } | null;
-  parent?: {
-    subscription_details?: {
-      subscription?: string | { id: string } | null;
-    };
-  } | null;
-}
-
-function extractSubscriptionId(invoice: InvoiceWithSubscription): string | null {
-  const direct = invoice.subscription ?? invoice.parent?.subscription_details?.subscription;
-  if (!direct) {
+function extractSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const value = invoice.subscription;
+  if (!value) {
     return null;
   }
-  return typeof direct === 'string' ? direct : direct.id;
+  return typeof value === 'string' ? value : value.id;
 }
 
 @Controller('billing')
@@ -37,9 +28,7 @@ export class BillingWebhookController {
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly invoicingService: InvoicingService,
   ) {
-    this.stripe = new Stripe(this.configService.get('stripe.secretKey', { infer: true }), {
-      apiVersion: '2024-06-20',
-    });
+    this.stripe = new Stripe(this.configService.get('stripe.secretKey', { infer: true }));
   }
 
   @Post('webhook')
@@ -98,7 +87,7 @@ export class BillingWebhookController {
       return;
     }
     if (event.type === 'invoice.paid') {
-      const invoice = event.data.object as InvoiceWithSubscription;
+      const invoice = event.data.object as Stripe.Invoice;
       const subscriptionId = extractSubscriptionId(invoice);
       if (subscriptionId && invoice.amount_paid > 0) {
         await this.billingService.recordPayment(
@@ -116,7 +105,7 @@ export class BillingWebhookController {
       return;
     }
     if (event.type === 'invoice.payment_failed') {
-      const invoice = event.data.object as InvoiceWithSubscription;
+      const invoice = event.data.object as Stripe.Invoice;
       const subscriptionId = extractSubscriptionId(invoice);
       if (subscriptionId) {
         await this.billingService.markPastDue(subscriptionId);

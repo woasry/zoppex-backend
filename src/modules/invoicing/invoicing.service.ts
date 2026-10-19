@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -83,7 +84,7 @@ export class InvoicingService {
           status: 'ISSUED',
           amount,
           currency,
-          oblioResponse: body as unknown as Record<string, unknown>,
+          oblioResponse: body as unknown as Prisma.InputJsonValue,
         },
       });
       this.logger.log(
