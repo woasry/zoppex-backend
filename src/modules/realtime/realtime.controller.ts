@@ -1,12 +1,14 @@
 import { Controller, Param, Query, Sse, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { MessageEvent } from '@nestjs/common';
 import { JwtPayload } from '../../common/interfaces/request-context.interface';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeService } from './realtime.service';
 
 @ApiTags('realtime')
+@SkipThrottle()
 @Controller('realtime')
 export class RealtimeController {
   constructor(

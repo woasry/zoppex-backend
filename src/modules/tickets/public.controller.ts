@@ -1,12 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JoinQueueDto } from './dto/join-queue.dto';
 import { JoinTicketResponseDto, PublicQueueInfoDto, TicketPositionDto } from '../queues/dto/response.dto';
 import { TicketsService } from './tickets.service';
 
 @ApiTags('public')
-@UseGuards(ThrottlerGuard)
 @Controller('public')
 export class PublicController {
   constructor(private readonly ticketsService: TicketsService) {}
