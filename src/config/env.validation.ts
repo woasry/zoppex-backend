@@ -67,6 +67,11 @@ export class EnvironmentVariables {
   @IsOptional()
   MAX_MEMBERS_PER_ORG: number = 10;
 
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  MAX_QUEUES_PER_ORG: number = 20;
+
   @IsEnum(MailDriver)
   @IsOptional()
   MAIL_DRIVER = MailDriver.Console;

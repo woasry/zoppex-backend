@@ -15,6 +15,7 @@ export interface AppConfig {
   };
   trialDays: number;
   maxMembersPerOrg: number;
+  maxQueuesPerOrg: number;
   mail: {
     driver: 'console' | 'smtp';
     from: string;
@@ -56,6 +57,7 @@ export default (): AppConfig => {
     },
     trialDays: Number(env.TRIAL_DAYS ?? 14),
     maxMembersPerOrg: Number(env.MAX_MEMBERS_PER_ORG ?? 10),
+    maxQueuesPerOrg: Number(env.MAX_QUEUES_PER_ORG ?? 20),
     mail: {
       driver: (env.MAIL_DRIVER ?? 'console') as 'console' | 'smtp',
       from: env.MAIL_FROM,
