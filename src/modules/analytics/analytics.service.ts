@@ -161,9 +161,10 @@ export class AnalyticsService {
           SELECT
             q.id AS "queueId",
             q.name AS "queueName",
-            COUNT(*) FILTER (WHERE t.status = TicketStatus.SERVED AND t."finishedAt" >= ${rangeStart}) AS served,
-            COUNT(*) FILTER (WHERE t.status = TicketStatus.SKIPPED AND t."finishedAt" >= ${rangeStart}) AS skipped,
+            COUNT(*) FILTER (WHERE t.status = ${TicketStatus.SERVED}::"TicketStatus" AND t."finishedAt" >= ${rangeStart}) AS served,
+            COUNT(*) FILTER (WHERE t.status = ${TicketStatus.SKIPPED}::"TicketStatus" AND t."finishedAt" >= ${rangeStart}) AS skipped,
             AVG(EXTRACT(EPOCH FROM (t."calledAt" - t."joinedAt")) / 60) FILTER (WHERE t."calledAt" IS NOT NULL AND t."joinedAt" >= ${rangeStart}) AS "avgWait"
+
           FROM queues q
           LEFT JOIN tickets t ON t."queueId" = q.id
           WHERE q."organizationId" = ${organizationId}
