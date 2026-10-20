@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsEnum } from 'class-validator';
+import { BillingCurrency, BillingInterval } from '@prisma/client';
+
 import { MemberRole } from '@prisma/client';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -10,11 +12,11 @@ import { JwtPayload, OrganizationContext } from '../../common/interfaces/request
 import { BillingService, BillingStatusDto, SubscribeResponseDto } from './billing.service';
 
 export class SubscribeRequestDto {
-  @IsEnum(['MONTHLY', 'ANNUAL'])
-  interval: 'MONTHLY' | 'ANNUAL';
+  @IsEnum(BillingInterval)
+  interval: BillingInterval;
 
-  @IsEnum(['GBP', 'USD'])
-  currency: 'GBP' | 'USD';
+  @IsEnum(BillingCurrency)
+  currency: BillingCurrency;
 }
 
 export class CancelRequestDto {

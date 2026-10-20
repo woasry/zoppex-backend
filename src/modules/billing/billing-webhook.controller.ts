@@ -6,16 +6,7 @@ import Stripe from 'stripe';
 import { Request } from 'express';
 import { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
-import { InvoicingService } from '../invoicing/invoicing.service';
 import { BillingService } from './billing.service';
-
-function extractSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const value = invoice.subscription;
-  if (!value) {
-    return null;
-  }
-  return typeof value === 'string' ? value : value.id;
-}
 
 @Controller('billing')
 export class BillingWebhookController {
@@ -26,7 +17,6 @@ export class BillingWebhookController {
     private readonly billingService: BillingService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService<AppConfig, true>,
-    private readonly invoicingService: InvoicingService,
   ) {
     this.stripe = new Stripe(this.configService.get('stripe.secretKey', { infer: true }));
   }
@@ -60,7 +50,7 @@ export class BillingWebhookController {
       },
     });
     try {
-      await this.process(event);
+      await this.billingService.handleStripeEvent(event);
       await this.prisma.webhookEvent.update({
         where: { provider_eventId: { provider: 'stripe', eventId: event.id } },
         data: { processedAt: new Date() },
@@ -70,46 +60,5 @@ export class BillingWebhookController {
     }
     return { received: true };
   }
-
-  private async process(event: Stripe.Event): Promise<void> {
-    if (
-      event.type === 'customer.subscription.created' ||
-      event.type === 'customer.subscription.updated' ||
-      event.type === 'customer.subscription.deleted'
-    ) {
-      const subscription = event.data.object as Stripe.Subscription;
-      const record = await this.prisma.subscription.findUnique({
-        where: { stripeSubscriptionId: subscription.id },
-      });
-      if (record) {
-        await this.billingService.applyStripeSubscription(record.organizationId, subscription);
-      }
-      return;
-    }
-    if (event.type === 'invoice.paid') {
-      const invoice = event.data.object as Stripe.Invoice;
-      const subscriptionId = extractSubscriptionId(invoice);
-      if (subscriptionId && invoice.amount_paid > 0) {
-        await this.billingService.recordPayment(
-          subscriptionId,
-          invoice.amount_paid,
-          invoice.currency,
-        );
-        await this.invoicingService.issueForStripePayment(
-          subscriptionId,
-          invoice.amount_paid,
-          invoice.currency,
-          invoice.number ?? '',
-        );
-      }
-      return;
-    }
-    if (event.type === 'invoice.payment_failed') {
-      const invoice = event.data.object as Stripe.Invoice;
-      const subscriptionId = extractSubscriptionId(invoice);
-      if (subscriptionId) {
-        await this.billingService.markPastDue(subscriptionId);
-      }
-    }
-  }
 }
+

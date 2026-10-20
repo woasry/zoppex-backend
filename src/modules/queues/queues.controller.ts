@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { QueueStatus, TicketStatus } from '@prisma/client';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { OrgMemberGuard } from '../../common/guards/org-member.guard';
+
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { OrganizationContext } from '../../common/interfaces/request-context.interface';
 import { CreateQueueDto } from './dto/create-queue.dto';
@@ -75,7 +77,7 @@ export class QueuesController {
     @CurrentOrganization() org: OrganizationContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<QueueActionResultDto> {
-    return this.queuesService.finishCurrent(org.organization.id, id, 'SERVED');
+    return this.queuesService.finishCurrent(org.organization.id, id, TicketStatus.SERVED);
   }
 
   @Post(':id/skip')
@@ -86,7 +88,7 @@ export class QueuesController {
     @CurrentOrganization() org: OrganizationContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<QueueActionResultDto> {
-    return this.queuesService.finishCurrent(org.organization.id, id, 'SKIPPED');
+    return this.queuesService.finishCurrent(org.organization.id, id, TicketStatus.SKIPPED);
   }
 
   @Post(':id/pause')
@@ -97,7 +99,7 @@ export class QueuesController {
     @CurrentOrganization() org: OrganizationContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<QueueActionResultDto> {
-    return this.queuesService.setStatus(org.organization.id, id, 'PAUSED');
+    return this.queuesService.setStatus(org.organization.id, id, QueueStatus.PAUSED);
   }
 
   @Post(':id/resume')
@@ -108,7 +110,7 @@ export class QueuesController {
     @CurrentOrganization() org: OrganizationContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<QueueActionResultDto> {
-    return this.queuesService.setStatus(org.organization.id, id, 'ACTIVE');
+    return this.queuesService.setStatus(org.organization.id, id, QueueStatus.ACTIVE);
   }
 }
 

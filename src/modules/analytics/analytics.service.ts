@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, QueueStatus, TicketStatus } from '@prisma/client';
+
 import { PrismaService } from '../../prisma/prisma.service';
 
 export class OverviewStatsDto {
@@ -105,17 +106,17 @@ export class AnalyticsService {
           where: { queue: { organizationId }, joinedAt: { gte: today } },
         }),
         this.prisma.ticket.count({
-          where: { queue: { organizationId }, status: 'WAITING' },
+          where: { queue: { organizationId }, status: TicketStatus.WAITING },
         }),
         this.prisma.ticket.count({
           where: {
             queue: { organizationId },
-            status: 'SERVED',
+            status: TicketStatus.SERVED,
             finishedAt: { gte: today },
           },
         }),
         this.prisma.queue.count({ where: { organizationId } }),
-        this.prisma.queue.count({ where: { organizationId, status: 'ACTIVE' } }),
+        this.prisma.queue.count({ where: { organizationId, status: QueueStatus.ACTIVE } }),
       ]);
     return {
       visitorsToday,
@@ -137,12 +138,12 @@ export class AnalyticsService {
       this.prisma.ticket.count({
         where: {
           queue: { organizationId },
-          status: 'SERVED',
+          status: TicketStatus.SERVED,
           finishedAt: { gte: rangeStart },
         },
       }),
       this.prisma.ticket.count({
-        where: { queue: { organizationId }, status: 'WAITING' },
+        where: { queue: { organizationId }, status: TicketStatus.WAITING },
       }),
       this.prisma.$queryRaw<DayCountRow[]>(
         Prisma.sql`
@@ -160,8 +161,8 @@ export class AnalyticsService {
           SELECT
             q.id AS "queueId",
             q.name AS "queueName",
-            COUNT(*) FILTER (WHERE t.status = 'SERVED' AND t."finishedAt" >= ${rangeStart}) AS served,
-            COUNT(*) FILTER (WHERE t.status = 'SKIPPED' AND t."finishedAt" >= ${rangeStart}) AS skipped,
+            COUNT(*) FILTER (WHERE t.status = TicketStatus.SERVED AND t."finishedAt" >= ${rangeStart}) AS served,
+            COUNT(*) FILTER (WHERE t.status = TicketStatus.SKIPPED AND t."finishedAt" >= ${rangeStart}) AS skipped,
             AVG(EXTRACT(EPOCH FROM (t."calledAt" - t."joinedAt")) / 60) FILTER (WHERE t."calledAt" IS NOT NULL AND t."joinedAt" >= ${rangeStart}) AS "avgWait"
           FROM queues q
           LEFT JOIN tickets t ON t."queueId" = q.id
@@ -174,7 +175,7 @@ export class AnalyticsService {
 
     const waitingByQueue = await this.prisma.ticket.groupBy({
       by: ['queueId'],
-      where: { queue: { organizationId }, status: 'WAITING' },
+      where: { queue: { organizationId }, status: TicketStatus.WAITING },
       _count: { _all: true },
     });
     const waitingMap = new Map(waitingByQueue.map((row) => [row.queueId, row._count._all]));

@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, Queue, Ticket } from '@prisma/client';
+import { Prisma, Queue, QueueStatus, Ticket, TicketStatus } from '@prisma/client';
+
 import { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -20,12 +21,17 @@ interface QueueRow {
   ticketSequence: number;
 }
 
+const ESTIMATE_MIN_MINUTES = 2;
+const ESTIMATE_RANGE_LOW_OFFSET = 2;
+const ESTIMATE_RANGE_HIGH_OFFSET = 3;
+
 function estimateMinutes(waitingCount: number, avgMinutes: number, desks: number): number {
   if (waitingCount === 0) {
     return 0;
   }
-  return Math.max(2, Math.ceil((waitingCount * avgMinutes) / Math.max(1, desks)));
+  return Math.max(ESTIMATE_MIN_MINUTES, Math.ceil((waitingCount * avgMinutes) / Math.max(1, desks)));
 }
+
 
 function toTicketResponse(ticket: Ticket): TicketResponseDto {
   return {
@@ -69,15 +75,15 @@ export class QueuesService {
       orderBy: { createdAt: 'asc' },
       include: {
         tickets: {
-          where: { status: { in: ['WAITING', 'CALLED', 'SERVED'] } },
+          where: { status: { in: [TicketStatus.WAITING, TicketStatus.CALLED, TicketStatus.SERVED] } },
           select: { status: true, number: true },
         },
       },
     });
     return queues.map((queue) => {
-      const waitingCount = queue.tickets.filter((t) => t.status === 'WAITING').length;
-      const called = queue.tickets.find((t) => t.status === 'CALLED');
-      const servedCount = queue.tickets.filter((t) => t.status === 'SERVED').length;
+      const waitingCount = queue.tickets.filter((t) => t.status === TicketStatus.WAITING).length;
+      const called = queue.tickets.find((t) => t.status === TicketStatus.CALLED);
+      const servedCount = queue.tickets.filter((t) => t.status === TicketStatus.SERVED).length;
       return {
         ...toQueueResponse(queue),
         waitingCount,
@@ -91,14 +97,14 @@ export class QueuesService {
   async findDetail(organizationId: string, queueId: string): Promise<QueueDetailDto> {
     const queue = await this.getOrgQueue(organizationId, queueId);
     const tickets = await this.prisma.ticket.findMany({
-      where: { queueId, status: { in: ['CALLED', 'WAITING'] } },
+      where: { queueId, status: { in: [TicketStatus.CALLED, TicketStatus.WAITING] } },
       orderBy: [{ status: 'desc' }, { joinedAt: 'asc' }],
     });
     const servedCount = await this.prisma.ticket.count({
-      where: { queueId, status: 'SERVED' },
+      where: { queueId, status: TicketStatus.SERVED },
     });
-    const waitingCount = tickets.filter((t) => t.status === 'WAITING').length;
-    const called = tickets.find((t) => t.status === 'CALLED');
+    const waitingCount = tickets.filter((t) => t.status === TicketStatus.WAITING).length;
+    const called = tickets.find((t) => t.status === TicketStatus.CALLED);
     return {
       ...toQueueResponse(queue),
       waitingCount,
@@ -171,16 +177,16 @@ export class QueuesService {
       if (queue.organizationId !== organizationId) {
         throw new ForbiddenException('You do not have access to this queue');
       }
-      if (queue.status !== 'ACTIVE') {
+      if (queue.status !== QueueStatus.ACTIVE) {
         throw new ConflictException('Resume this queue first');
       }
       const current = await tx.ticket.findFirst({
-        where: { queueId: queue.id, status: 'CALLED' },
+        where: { queueId: queue.id, status: TicketStatus.CALLED },
       });
       if (current) {
         await tx.ticket.update({
           where: { id: current.id },
-          data: { status: 'SERVED', finishedAt: new Date() },
+          data: { status: TicketStatus.SERVED, finishedAt: new Date() },
         });
         await tx.activityEvent.create({
           data: {
@@ -193,7 +199,7 @@ export class QueuesService {
         this.realtimeService.publishTicketUpdated(organizationId, queue.id, current.id);
       }
       const next = await tx.ticket.findFirst({
-        where: { queueId: queue.id, status: 'WAITING' },
+        where: { queueId: queue.id, status: TicketStatus.WAITING },
         orderBy: { joinedAt: 'asc' },
       });
       if (!next) {
@@ -201,7 +207,7 @@ export class QueuesService {
       }
       await tx.ticket.update({
         where: { id: next.id },
-        data: { status: 'CALLED', calledAt: new Date() },
+        data: { status: TicketStatus.CALLED, calledAt: new Date() },
       });
       await tx.activityEvent.create({
         data: {
@@ -220,7 +226,7 @@ export class QueuesService {
   async finishCurrent(
     organizationId: string,
     queueId: string,
-    outcome: 'SERVED' | 'SKIPPED',
+    outcome: TicketStatus.SERVED | TicketStatus.SKIPPED,
   ): Promise<{ message: string; queue: QueueDetailDto }> {
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const queue = await this.lockQueue(tx, queueId);
@@ -228,7 +234,7 @@ export class QueuesService {
         throw new ForbiddenException('You do not have access to this queue');
       }
       const current = await tx.ticket.findFirst({
-        where: { queueId: queue.id, status: 'CALLED' },
+        where: { queueId: queue.id, status: TicketStatus.CALLED },
       });
       if (!current) {
         return { message: 'No guest is currently being called' };
@@ -241,12 +247,12 @@ export class QueuesService {
         data: {
           organizationId,
           queueId: queue.id,
-          type: outcome === 'SERVED' ? 'TICKET_SERVED' : 'TICKET_SKIPPED',
+          type: outcome === TicketStatus.SERVED ? 'TICKET_SERVED' : 'TICKET_SKIPPED',
           payload: { ticketNumber: current.number, queueName: queue.name },
         },
       });
       return {
-        message: `${current.number} ${outcome === 'SERVED' ? 'completed' : 'skipped'}`,
+        message: `${current.number} ${outcome === TicketStatus.SERVED ? 'completed' : 'skipped'}`,
         ticketId: current.id,
       };
     });
@@ -260,7 +266,7 @@ export class QueuesService {
   async setStatus(
     organizationId: string,
     queueId: string,
-    status: 'ACTIVE' | 'PAUSED',
+    status: QueueStatus.ACTIVE | QueueStatus.PAUSED,
   ): Promise<{ message: string; queue: QueueDetailDto }> {
     const queue = await this.getOrgQueue(organizationId, queueId);
     if (queue.status === status) {
@@ -275,14 +281,14 @@ export class QueuesService {
         data: {
           organizationId,
           queueId: queue.id,
-          type: status === 'PAUSED' ? 'QUEUE_PAUSED' : 'QUEUE_RESUMED',
+          type: status === QueueStatus.PAUSED ? 'QUEUE_PAUSED' : 'QUEUE_RESUMED',
           payload: { queueName: queue.name },
         },
       });
     });
     this.realtimeService.publishQueueUpdated(organizationId, queue.id);
     return {
-      message: status === 'PAUSED' ? 'Queue paused' : 'Queue resumed',
+      message: status === QueueStatus.PAUSED ? 'Queue paused' : 'Queue resumed',
       queue: await this.findDetail(organizationId, queue.id),
     };
   }
@@ -334,4 +340,12 @@ export class QueuesService {
   estimateMinutes(waitingCount: number, avgMinutes: number, desks: number) {
     return estimateMinutes(waitingCount, avgMinutes, desks);
   }
+
+  estimateRange(eta: number): { low: number; high: number } {
+    return {
+      low: Math.max(1, eta - ESTIMATE_RANGE_LOW_OFFSET),
+      high: eta + ESTIMATE_RANGE_HIGH_OFFSET,
+    };
+  }
 }
+

@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Ticket } from '@prisma/client';
+import { Prisma, QueueStatus, Ticket, TicketStatus } from '@prisma/client';
+
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { QueuesService } from '../queues/queues.service';
@@ -38,7 +39,7 @@ export class TicketsService {
       throw new NotFoundException('Queue not found');
     }
     const waitingCount = await this.prisma.ticket.count({
-      where: { queueId, status: 'WAITING' },
+      where: { queueId, status: TicketStatus.WAITING },
     });
     return {
       queueId: queue.id,
@@ -65,7 +66,7 @@ export class TicketsService {
         throw new NotFoundException('Queue not found');
       }
       const queue = rows[0];
-      if (queue.status !== 'ACTIVE') {
+      if (queue.status !== QueueStatus.ACTIVE) {
         throw new ConflictException('This queue is temporarily paused');
       }
       const number = `${queue.code}${pad3(queue.ticketSequence)}`;
@@ -74,7 +75,7 @@ export class TicketsService {
           queueId: queue.id,
           number,
           displayName: displayName?.trim() || null,
-          status: 'WAITING',
+          status: TicketStatus.WAITING,
         },
       });
       await tx.queue.update({
@@ -113,7 +114,7 @@ export class TicketsService {
       organizationName: queue.organization.name,
       queueStatus: queue.status,
     };
-    if (ticket.status !== 'WAITING') {
+    if (ticket.status !== TicketStatus.WAITING) {
       return {
         ...base,
         peopleAhead: 0,
@@ -124,23 +125,24 @@ export class TicketsService {
     const ahead = await this.prisma.ticket.count({
       where: {
         queueId: queue.id,
-        status: 'WAITING',
+        status: TicketStatus.WAITING,
         joinedAt: { lt: ticket.joinedAt },
       },
     });
     const called = await this.prisma.ticket.findFirst({
-      where: { queueId: queue.id, status: 'CALLED' },
+      where: { queueId: queue.id, status: TicketStatus.CALLED },
       select: { id: true },
     });
     const peopleAhead = ahead + (called ? 1 : 0);
-    const eta = Math.max(2, Math.ceil((ahead * queue.avgMinutes) / Math.max(1, queue.desks)));
+    const eta = this.queuesService.estimateMinutes(ahead, queue.avgMinutes, queue.desks);
     return {
       ...base,
       peopleAhead,
       estimatedWaitMinutes: eta,
-      estimateRangeMinutes: { low: Math.max(1, eta - 2), high: eta + 3 },
+      estimateRangeMinutes: this.queuesService.estimateRange(eta),
     };
   }
+
 
   toTicketResponse(ticket: Ticket) {
     return this.queuesService.toTicketResponse(ticket);

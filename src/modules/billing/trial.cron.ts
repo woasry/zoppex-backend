@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { SubscriptionStatus } from '@prisma/client';
+
 import { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../notifications/email.service';
@@ -20,10 +22,10 @@ export class TrialCronService {
   async expireTrials(): Promise<void> {
     const result = await this.prisma.subscription.updateMany({
       where: {
-        status: 'TRIALING',
+        status: SubscriptionStatus.TRIALING,
         trialEndsAt: { lt: new Date() },
       },
-      data: { status: 'TRIAL_EXPIRED' },
+      data: { status: SubscriptionStatus.TRIAL_EXPIRED },
     });
     if (result.count > 0) {
       this.logger.log(`Expired ${result.count} trials`);
@@ -41,12 +43,12 @@ export class TrialCronService {
       const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
       const expiring = await this.prisma.subscription.findMany({
         where: {
-          status: 'TRIALING',
+          status: SubscriptionStatus.TRIALING,
           trialEndsAt: { gte: start, lt: end },
         },
         include: {
           organization: {
-            include: { memberships: { where: { role: 'OWNER' }, include: { user: true } } },
+            include: { memberships: { where: { role: MemberRole.OWNER }, include: { user: true } } },
           },
         },
       });

@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
-import { MemberRole, Organization } from '@prisma/client';
+import { MemberRole, Organization, SubscriptionStatus } from '@prisma/client';
+
 import { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../notifications/email.service';
@@ -101,7 +102,7 @@ export class OrganizationsService {
     if (!membership || membership.organizationId !== organizationId) {
       throw new NotFoundException('Member not found');
     }
-    if (membership.role === 'OWNER') {
+    if (membership.role === MemberRole.OWNER) {
       throw new ForbiddenException('The workspace owner cannot be removed');
     }
     await this.prisma.membership.delete({ where: { id: membershipId } });
@@ -126,7 +127,7 @@ export class OrganizationsService {
     inviterId: string,
     dto: CreateInvitationDto,
   ): Promise<InvitationResponse> {
-    if (dto.role === 'OWNER') {
+    if (dto.role === MemberRole.OWNER) {
       throw new BadRequestException('Cannot invite someone as owner');
     }
     const maxMembers = this.configService.get('maxMembersPerOrg', { infer: true });
@@ -267,13 +268,13 @@ export class OrganizationsService {
         data: {
           userId,
           organizationId: organization.id,
-          role: 'OWNER',
+          role: MemberRole.OWNER,
         },
       });
       await tx.subscription.create({
         data: {
           organizationId: organization.id,
-          status: 'TRIALING',
+          status: SubscriptionStatus.TRIALING,
           trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000),
         },
       });

@@ -25,7 +25,9 @@ import { AuthResponseDto, MeResponseDto, MessageResponseDto } from './dto/respon
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { AcceptInvitationService } from './accept-invitation.service';
+import { toAuthResponse, toMeResponse } from './auth.mapper';
 import { ConfigService } from '@nestjs/config';
+
 
 export const REFRESH_COOKIE_NAME = 'zoppex_refresh';
 
@@ -47,7 +49,8 @@ export class AuthController {
   ): Promise<AuthResponseDto> {
     const result = await this.authService.register(dto);
     this.setRefreshCookie(res, result.refreshToken);
-    return this.toAuthResponse(result);
+    return toAuthResponse(result);
+
   }
 
   @Post('login')
@@ -60,7 +63,8 @@ export class AuthController {
   ): Promise<AuthResponseDto> {
     const result = await this.authService.login(dto);
     this.setRefreshCookie(res, result.refreshToken);
-    return this.toAuthResponse(result);
+    return toAuthResponse(result);
+
   }
 
   @Post('refresh')
@@ -77,7 +81,8 @@ export class AuthController {
     }
     const result = await this.authService.refresh(token);
     this.setRefreshCookie(res, result.refreshToken);
-    return this.toAuthResponse(result);
+    return toAuthResponse(result);
+
   }
 
   @Post('logout')
@@ -102,7 +107,8 @@ export class AuthController {
   @ApiOkResponse({ type: MeResponseDto })
   async me(@CurrentUser() user: JwtPayload): Promise<MeResponseDto> {
     const authenticated = await this.authService.getAuthenticatedUser(user.sub);
-    return this.toMeResponse(authenticated);
+    return toMeResponse(authenticated);
+
   }
 
   @Post('verify-email')
@@ -166,58 +172,5 @@ export class AuthController {
       path: '/api/auth',
     });
   }
-
-  private toAuthResponse(result: {
-    accessToken: string;
-    user: Awaited<ReturnType<AuthService['getAuthenticatedUser']>>;
-  }): AuthResponseDto {
-    return {
-      accessToken: result.accessToken,
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        firstName: result.user.firstName,
-        lastName: result.user.lastName,
-        emailVerifiedAt: result.user.emailVerifiedAt?.toISOString() ?? null,
-      },
-      memberships: result.user.memberships.map((membership) => ({
-        id: membership.id,
-        role: membership.role,
-        organization: this.toOrganizationResponse(membership.organization),
-      })),
-    };
-  }
-
-  private toMeResponse(user: Awaited<ReturnType<AuthService['getAuthenticatedUser']>>): MeResponseDto {
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
-      },
-      memberships: user.memberships.map((membership) => ({
-        id: membership.id,
-        role: membership.role,
-        organization: this.toOrganizationResponse(membership.organization),
-      })),
-    };
-  }
-
-  private toOrganizationResponse(organization: {
-    id: string;
-    name: string;
-    location: string | null;
-    contactEmail: string | null;
-    timezone: string;
-  }) {
-    return {
-      id: organization.id,
-      name: organization.name,
-      location: organization.location,
-      contactEmail: organization.contactEmail,
-      timezone: organization.timezone,
-    };
-  }
 }
+

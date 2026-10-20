@@ -8,11 +8,15 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { SubscriptionStatus } from '@prisma/client';
+
 import { PrismaService } from '../../prisma/prisma.service';
+
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ORGANIZATION_HEADER } from './org-member.guard';
 
-const ENTITLED_STATUSES = new Set(['TRIALING', 'ACTIVE', 'PAST_DUE']);
+const ENTITLED_STATUSES = new Set([SubscriptionStatus.TRIALING, SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE]);
+
 
 @Injectable()
 export class SubscriptionGuard extends JwtAuthGuard implements CanActivate {

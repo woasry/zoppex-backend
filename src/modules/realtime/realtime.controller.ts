@@ -4,7 +4,6 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { MessageEvent } from '@nestjs/common';
 import { JwtPayload } from '../../common/interfaces/request-context.interface';
-import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeService } from './realtime.service';
 
 @ApiTags('realtime')
@@ -14,12 +13,11 @@ export class RealtimeController {
   constructor(
     private readonly realtimeService: RealtimeService,
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
   ) {}
 
   @Sse('organization')
   @ApiOperation({ summary: 'Live events for an organization dashboard (token via query param)' })
-  streamOrganization(
+  async streamOrganization(
     @Query('token') token: string,
     @Query('organizationId') organizationId: string,
   ) {
@@ -32,21 +30,14 @@ export class RealtimeController {
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
-    return this.prisma.membership
-      .findUnique({
-        where: {
-          userId_organizationId: {
-            userId: payload.sub,
-            organizationId,
-          },
-        },
-      })
-      .then((membership) => {
-        if (!membership) {
-          throw new UnauthorizedException('No access to this organization');
-        }
-        return this.realtimeService.streamOrganization(organizationId);
-      });
+    const hasAccess = await this.realtimeService.hasOrganizationAccess(
+      payload.sub,
+      organizationId,
+    );
+    if (!hasAccess) {
+      throw new UnauthorizedException('No access to this organization');
+    }
+    return this.realtimeService.streamOrganization(organizationId);
   }
 
   @Sse('public/queues/:queueId')
@@ -63,3 +54,4 @@ export class RealtimeController {
 }
 
 export type { MessageEvent };
+

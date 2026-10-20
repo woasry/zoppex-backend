@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MessageEvent } from '@nestjs/common';
 import { Subject, interval, merge } from 'rxjs';
 import { finalize, map } from 'rxjs/operators';
+import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEvent, RealtimeEventType } from './realtime.event';
 
 type StreamMap = Map<string, Set<Subject<MessageEvent>>>;
@@ -14,6 +15,16 @@ export class RealtimeService {
   private readonly orgStreams: StreamMap = new Map();
   private readonly queueStreams: StreamMap = new Map();
   private readonly ticketStreams: StreamMap = new Map();
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async hasOrganizationAccess(userId: string, organizationId: string): Promise<boolean> {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+    });
+    return membership !== null;
+  }
+
 
   streamOrganization(organizationId: string) {
     return this.createStream(this.orgStreams, organizationId);

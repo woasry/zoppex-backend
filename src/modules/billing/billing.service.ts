@@ -1,23 +1,27 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Subscription } from '@prisma/client';
+import { Subscription, BillingCurrency, BillingInterval, SubscriptionStatus } from '@prisma/client';
+
+
 import Stripe from 'stripe';
 import { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../notifications/email.service';
+import { InvoicingService } from '../invoicing/invoicing.service';
+
 import {
   renderPaymentReceivedEmail,
   renderSubscriptionConfirmedEmail,
 } from '../notifications/email-templates';
 
 export interface SubscribeRequest {
-  interval: 'MONTHLY' | 'ANNUAL';
-  currency: 'GBP' | 'USD';
+  interval: BillingInterval;
+  currency: BillingCurrency;
 }
 
 export class SubscribeRequestDto {
-  interval: 'MONTHLY' | 'ANNUAL';
-  currency: 'GBP' | 'USD';
+  interval: BillingInterval;
+  currency: BillingCurrency;
 }
 
 export class SubscribeResponseDto {
@@ -43,12 +47,13 @@ export class BillingStatusDto {
 }
 
 const STATUS_MAP: Record<string, Subscription['status']> = {
-  trialing: 'TRIALING',
-  active: 'ACTIVE',
-  past_due: 'PAST_DUE',
-  canceled: 'CANCELED',
-  unpaid: 'CANCELED',
-  incomplete_expired: 'CANCELED',
+  trialing: SubscriptionStatus.TRIALING,
+  active: SubscriptionStatus.ACTIVE,
+
+  past_due: SubscriptionStatus.PAST_DUE,
+  canceled: SubscriptionStatus.CANCELED,
+  unpaid: SubscriptionStatus.CANCELED,
+  incomplete_expired: SubscriptionStatus.CANCELED,
 };
 
 function formatAmount(amount: number, currency: string): string {
@@ -67,9 +72,57 @@ export class BillingService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly emailService: EmailService,
+    private readonly invoicingService: InvoicingService,
   ) {
     this.stripe = new Stripe(this.configService.get('stripe.secretKey', { infer: true }));
   }
+
+  async handleStripeEvent(event: Stripe.Event): Promise<void> {
+    if (
+      event.type === 'customer.subscription.created' ||
+      event.type === 'customer.subscription.updated' ||
+      event.type === 'customer.subscription.deleted'
+    ) {
+      const subscription = event.data.object as Stripe.Subscription;
+      const record = await this.prisma.subscription.findUnique({
+        where: { stripeSubscriptionId: subscription.id },
+      });
+      if (record) {
+        await this.applyStripeSubscription(record.organizationId, subscription);
+      }
+      return;
+    }
+    if (event.type === 'invoice.paid') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = this.extractSubscriptionId(invoice);
+      if (subscriptionId && invoice.amount_paid > 0) {
+        await this.recordPayment(subscriptionId, invoice.amount_paid, invoice.currency);
+        await this.invoicingService.issueForStripePayment(
+          subscriptionId,
+          invoice.amount_paid,
+          invoice.currency,
+          invoice.number ?? '',
+        );
+      }
+      return;
+    }
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = this.extractSubscriptionId(invoice);
+      if (subscriptionId) {
+        await this.markPastDue(subscriptionId);
+      }
+    }
+  }
+
+  private extractSubscriptionId(invoice: Stripe.Invoice): string | null {
+    const value = invoice.subscription;
+    if (!value) {
+      return null;
+    }
+    return typeof value === 'string' ? value : value.id;
+  }
+
 
   async getStatus(organizationId: string): Promise<BillingStatusDto> {
     const subscription = await this.getSubscription(organizationId);
@@ -92,10 +145,10 @@ export class BillingService {
   private buildPlans(): BillingPlanDto[] {
     const pricing = this.configService.get('pricing', { infer: true });
     return [
-      { interval: 'MONTHLY', currency: 'GBP', label: `£${pricing.monthlyGbp} per month` },
-      { interval: 'ANNUAL', currency: 'GBP', label: `£${pricing.annualGbp} per year` },
-      { interval: 'MONTHLY', currency: 'USD', label: `$${pricing.monthlyUsd} per month` },
-      { interval: 'ANNUAL', currency: 'USD', label: `$${pricing.annualUsd} per year` },
+      { interval: BillingInterval.MONTHLY, currency: BillingCurrency.GBP, label: `£${pricing.monthlyGbp} per month` },
+      { interval: BillingInterval.ANNUAL, currency: BillingCurrency.GBP, label: `£${pricing.annualGbp} per year` },
+      { interval: BillingInterval.MONTHLY, currency: BillingCurrency.USD, label: `$${pricing.monthlyUsd} per month` },
+      { interval: BillingInterval.ANNUAL, currency: BillingCurrency.USD, label: `$${pricing.annualUsd} per year` },
     ];
   }
 
@@ -106,7 +159,8 @@ export class BillingService {
     request: SubscribeRequest,
   ): Promise<SubscribeResponseDto> {
     const subscription = await this.getSubscription(organizationId);
-    if (subscription.status === 'ACTIVE' || subscription.status === 'PAST_DUE') {
+    if (subscription.status === SubscriptionStatus.ACTIVE || subscription.status === SubscriptionStatus.PAST_DUE) {
+
       throw new BadRequestException('This workspace already has an active subscription');
     }
     const priceId = this.priceId(request.interval, request.currency);
@@ -139,7 +193,7 @@ export class BillingService {
         stripeCustomerId: customerId,
         stripeSubscriptionId: stripeSubscription.id,
         interval: request.interval,
-        currency: request.currency as 'GBP' | 'USD',
+        currency: request.currency as BillingCurrency,
       },
     });
     return {
@@ -180,14 +234,15 @@ export class BillingService {
     stripeSubscription: Stripe.Subscription,
   ): Promise<void> {
     const current = await this.getSubscription(organizationId);
-    const mappedStatus = STATUS_MAP[stripeSubscription.status] ?? 'CANCELED';
+    const mappedStatus = STATUS_MAP[stripeSubscription.status] ?? SubscriptionStatus.CANCELED;
     const item = stripeSubscription.items.data[0];
     const price = item?.price;
-    const interval = price?.recurring?.interval === 'year' ? 'ANNUAL' : 'MONTHLY';
-    const currency = (price?.currency ?? 'gbp').toUpperCase() as 'GBP' | 'USD';
+    const interval = price?.recurring?.interval === 'year' ? BillingInterval.ANNUAL : BillingInterval.MONTHLY;
+    const currency = (price?.currency ?? 'gbp').toUpperCase() as BillingCurrency;
     const amount = price?.unit_amount ?? 0;
     const becameActive =
-      mappedStatus === 'ACTIVE' && current.status !== 'ACTIVE' && !current.canceledAt;
+      mappedStatus === SubscriptionStatus.ACTIVE && current.status !== SubscriptionStatus.ACTIVE && !current.canceledAt;
+
     await this.prisma.subscription.update({
       where: { organizationId },
       data: {
@@ -198,7 +253,7 @@ export class BillingService {
           ? new Date(stripeSubscription.current_period_end * 1000)
           : null,
         canceledAt:
-          mappedStatus === 'CANCELED'
+          mappedStatus === SubscriptionStatus.CANCELED
             ? new Date()
             : stripeSubscription.cancel_at_period_end
               ? new Date()
@@ -210,7 +265,7 @@ export class BillingService {
         where: { id: organizationId },
       });
       const ownerMembership = await this.prisma.membership.findFirst({
-        where: { organizationId, role: 'OWNER' },
+        where: { organizationId, role: MemberRole.OWNER },
         include: { user: true },
       });
       if (organization && ownerMembership) {
@@ -219,7 +274,7 @@ export class BillingService {
           template: renderSubscriptionConfirmedEmail(
             organization.name,
             formatAmount(amount, currency.toLowerCase()),
-            interval === 'ANNUAL' ? 'year' : 'month',
+            interval === BillingInterval.ANNUAL ? 'year' : 'month',
             this.configService.get('appUrl', { infer: true }),
           ),
         });
@@ -242,7 +297,7 @@ export class BillingService {
       where: { id: subscription.organizationId },
     });
     const ownerMembership = await this.prisma.membership.findFirst({
-      where: { organizationId: subscription.organizationId, role: 'OWNER' },
+      where: { organizationId: subscription.organizationId, role: MemberRole.OWNER },
       include: { user: true },
     });
     if (organization && ownerMembership) {
@@ -259,8 +314,8 @@ export class BillingService {
 
   async markPastDue(stripeSubscriptionId: string): Promise<void> {
     await this.prisma.subscription.updateMany({
-      where: { stripeSubscriptionId, status: { not: 'CANCELED' } },
-      data: { status: 'PAST_DUE' },
+      where: { stripeSubscriptionId, status: { not: SubscriptionStatus.CANCELED } },
+      data: { status: SubscriptionStatus.PAST_DUE },
     });
   }
 
@@ -312,15 +367,15 @@ export class BillingService {
     }
     const pricing = this.configService.get('pricing', { infer: true });
     const amount =
-      interval === 'ANNUAL'
-        ? currency === 'GBP'
+      interval === BillingInterval.ANNUAL
+        ? currency === BillingCurrency.GBP
           ? pricing.annualGbp
           : pricing.annualUsd
-        : currency === 'GBP'
+        : currency === BillingCurrency.GBP
           ? pricing.monthlyGbp
           : pricing.monthlyUsd;
     return `${formatAmount(amount * 100, currency.toLowerCase())} / ${
-      interval === 'ANNUAL' ? 'year' : 'month'
+      interval === BillingInterval.ANNUAL ? 'year' : 'month'
     }`;
   }
 }
