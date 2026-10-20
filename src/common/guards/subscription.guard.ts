@@ -15,7 +15,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ORGANIZATION_HEADER } from './org-member.guard';
 
-const ENTITLED_STATUSES = new Set([SubscriptionStatus.TRIALING, SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE]);
+const ENTITLED_STATUSES = new Set<SubscriptionStatus>([
+  SubscriptionStatus.TRIALING,
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE,
+]);
+
 
 
 @Injectable()

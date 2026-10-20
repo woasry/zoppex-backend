@@ -226,7 +226,8 @@ export class QueuesService {
   async finishCurrent(
     organizationId: string,
     queueId: string,
-    outcome: TicketStatus.SERVED | TicketStatus.SKIPPED,
+    outcome: typeof TicketStatus.SERVED | typeof TicketStatus.SKIPPED,
+
   ): Promise<{ message: string; queue: QueueDetailDto }> {
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const queue = await this.lockQueue(tx, queueId);
@@ -266,7 +267,8 @@ export class QueuesService {
   async setStatus(
     organizationId: string,
     queueId: string,
-    status: QueueStatus.ACTIVE | QueueStatus.PAUSED,
+    status: typeof QueueStatus.ACTIVE | typeof QueueStatus.PAUSED,
+
   ): Promise<{ message: string; queue: QueueDetailDto }> {
     const queue = await this.getOrgQueue(organizationId, queueId);
     if (queue.status === status) {

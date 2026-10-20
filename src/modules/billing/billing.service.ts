@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Subscription, BillingCurrency, BillingInterval, SubscriptionStatus } from '@prisma/client';
+import { Subscription, BillingCurrency, BillingInterval, MemberRole, SubscriptionStatus } from '@prisma/client';
+
 
 
 import Stripe from 'stripe';
